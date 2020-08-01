@@ -10,5 +10,5 @@ pub fn read_config() -> ClientConfig {
     for (config_key, config_value) in &settings.try_into::<HashMap<String, String>>().unwrap() {
         kafka_config.set(&config_key.replace("_", "."), &config_value);
     };
-    return kafka_config;
+    kafka_config
 }
