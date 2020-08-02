@@ -12,11 +12,10 @@ pub struct Topic {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config_reader::read_config();
-    let consumer: StreamConsumer = config.0.create().expect("ERRITO");
+    let consumer: StreamConsumer = config.0.create()?;
     consumer.start();
     let metadata = &consumer
-        .fetch_metadata(None, Duration::from_secs(1))
-        .expect("errou");
+        .fetch_metadata(None, Duration::from_secs(1))?;
     for t in metadata.topics() {
         let mut partition_high_watermarks: Vec<(i32, i64)> = Vec::new();
         let partitions: i32 = t.partitions().len().try_into().unwrap();
