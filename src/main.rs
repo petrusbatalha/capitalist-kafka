@@ -10,6 +10,12 @@ pub struct Topic {
     pub partition_high_watermarks: Vec<(i32, i64)>,
 }
 
+pub struct GroupOffsets {
+    name: String,
+    topic: Topic,
+    lag: i64,
+}
+
 fn fetch_topics_highwatermarks(consumer: &StreamConsumer) -> Result<Vec<Topic>, Box<dyn std::error::Error>> {
     let mut topics: Vec<Topic> = Vec::new();
     let metadata = &consumer.fetch_metadata(None, Duration::from_secs(1))?;
@@ -35,7 +41,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     let consumer: StreamConsumer = config.0.create().unwrap();
     &consumer.start();
     let topics_watermarks = fetch_topics_highwatermarks(&consumer)?;
-    
-    println!("{:?}", &topics_watermarks.len());
+    let group_list = &consumer.fetch_group_list(None, Duration::from_secs(2))?;
+    for group in group_list.groups() {
+        println!("{:?}", group.name());
+    }
     Ok(())
 }
