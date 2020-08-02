@@ -1,14 +1,27 @@
 use rdkafka::config::ClientConfig;
 use std::collections::HashMap;
+use config::Value;
 extern crate config;
 
-pub fn read_config() -> ClientConfig {
+pub fn read_config() -> (ClientConfig, String) {
     let mut kafka_config = ClientConfig::new();
-    let mut settings = config::Config::default();
-    settings.merge(config::File::with_name("kafka_config.toml")).unwrap();
-    
-    for (config_key, config_value) in &settings.try_into::<HashMap<String, String>>().unwrap() {
-        kafka_config.set(&config_key.replace("_", "."), &config_value);
+    let mut settings = config::Config::new();
+    settings.merge(config::File::with_name("config/kafka_config.toml")).unwrap();
+
+    let topics = match settings.get_str("topics") {
+        Ok(t) => t,
+        Err(e) => panic!(e),
     };
-    kafka_config
+    let settings = settings.try_into::<HashMap<String,  Value>>().unwrap();
+    
+    for (config_key, config_value) in settings {
+        if config_key == "topics" {
+            continue;
+        }
+        match config_value.into_str() {
+            Ok(v) => kafka_config.set(&config_key.replace("_", "."), &v),
+            Err(_) => continue,
+        };
+    };
+    (kafka_config, topics)
 }

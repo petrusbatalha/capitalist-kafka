@@ -5,6 +5,8 @@ authors = ["Petrus Batalha <petrus.batalha1@ibm.com>"]
 edition = "2018"
 
 [dependencies]
-rdkafka = { version = "0.24", features = ["cmake-build", "ssl", "gssapi"] }
-serde = { version = "1.0", features = ["derive"] }
 config = "0.10.1"
+tokio   = "0.1.21"
+serde = { version = "1.0.114", features = ["derive"] }
+rdkafka = { version = "0.24", features = ["cmake-build", "ssl", "gssapi"] }
+
