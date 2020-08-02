@@ -10,12 +10,9 @@ pub struct Topic {
     pub partition_high_watermarks: Vec<(i32, i64)>,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = config_reader::read_config();
-    let consumer: StreamConsumer = config.0.create()?;
-    consumer.start();
-    let metadata = &consumer
-        .fetch_metadata(None, Duration::from_secs(1))?;
+fn fetch_topics_highwatermarks(consumer: &StreamConsumer) -> Result<Vec<Topic>, Box<dyn std::error::Error>> {
+    let mut topics: Vec<Topic> = Vec::new();
+    let metadata = &consumer.fetch_metadata(None, Duration::from_secs(1))?;
     for t in metadata.topics() {
         let mut partition_high_watermarks: Vec<(i32, i64)> = Vec::new();
         let partitions: i32 = t.partitions().len().try_into().unwrap();
@@ -28,8 +25,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             name: t.name().to_string(),
             partition_high_watermarks: partition_high_watermarks,
         };
-        println!("{:?}", topic.partition_high_watermarks);
-        println!("{:?}", topic.name);
+        &topics.push(topic);
     }
+    Ok(topics)
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>>{
+    let config = config_reader::read_config();
+    let consumer: StreamConsumer = config.0.create().unwrap();
+    &consumer.start();
+    let topics_watermarks = fetch_topics_highwatermarks(&consumer)?;
+    
+    println!("{:?}", &topics_watermarks.len());
     Ok(())
 }
