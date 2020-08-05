@@ -25,6 +25,6 @@ pub fn read_config() -> (ClientConfig, String) {
             Err(_) => continue,
         };
     }
-    kafka_config.set("auto.offset.reset", "smallest");
+    kafka_config.set("enable.auto.commit", "false");
     (kafka_config, topics)
 }

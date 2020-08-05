@@ -46,14 +46,18 @@ async fn main() {
     let mut message_stream = consumer.start();
     while let Some(message) = message_stream.next().await {
         match message {
-            Err(e) => println!("Kafka error: {}", e),
-            Ok(m) => {
-                let key = m.key().unwrap_or(&[]);
-                let payload = m.payload().unwrap_or(&[]);
+            Ok(Ok(m)) => {
+            let key = m.key().unwrap_or(&[]);
+            let payload = m.payload().unwrap_or(&[]);
+            Ok(Ok(m) => {
+
                 let mut key_rdr = Cursor::new(key);
                 let mut payload_rdr = Cursor::new(payload);
                 parse_group_offset(& mut key_rdr, & mut payload_rdr)
-                }
-            }
+            },
+            Ok(_) => {},
+            Err(e) => format_error_chain!(e),
+            };
         }
     }
+}

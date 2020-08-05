@@ -1,3 +1,5 @@
 bootstrap_servers="127.0.0.1:9092"
 topics="__consumer_offset"
 group_id="manager_local"
+enable_auto_offset_store="false"
+auto_commit_interval_ms=1000000

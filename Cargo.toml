@@ -7,6 +7,8 @@ edition = "2018"
 [dependencies]
 futures = "0.3"
 byteorder = "1.0.0"
+error-chain = "0.12.0"
+log = "0.4.6"
 config = "0.10.1"
 tokio = { version = "0.2", features = ["macros", "tcp", "dns", "io-util"] }
 serde = { version = "1.0.114", features = ["derive"] }
