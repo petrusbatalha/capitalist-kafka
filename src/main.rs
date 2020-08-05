@@ -115,7 +115,13 @@ async fn main() {
                         partition,
                         offset,
                     }) => {
-                        let wms = fetch_topics_highwatermarks(&consumer);
+                        let wms_map = match fetch_topics_highwatermarks(&consumer) {
+                            Ok(w) =>  {
+                                let partition_high_wms = w[&topic][&partition];
+                                println!("High partition watermark {:?}", &partition_high_wms);
+                            },
+                            Err(e) => (),
+                        };
                         println!("
                                   Offset Topico {:?},
                                   Offset Group: {:?},
@@ -124,6 +130,7 @@ async fn main() {
                                   Grupo: {:?}",
                         offset_topic-1, offset-1, topic, partition, group);
                     }
+                    
                     Ok(_) => {}
                     Err(e) => println!("{:?}", e),
                 }
