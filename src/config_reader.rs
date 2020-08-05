@@ -7,7 +7,7 @@ pub fn read_config() -> (ClientConfig, String) {
     let mut kafka_config = ClientConfig::new();
     let mut settings = config::Config::new();
     settings
-        .merge(config::File::with_name("config/kafka_config.toml"))
+        .merge(config::File::with_name("config/local.toml"))
         .unwrap();
 
     let topics = match settings.get_str("topics") {
@@ -25,5 +25,6 @@ pub fn read_config() -> (ClientConfig, String) {
             Err(_) => continue,
         };
     }
+    kafka_config.set("auto.offset.reset", "smallest");
     (kafka_config, topics)
 }
