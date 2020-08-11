@@ -1,9 +1,8 @@
+use super::utils::ConsumerUpdate;
+use super::utils::Result;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{BufRead, Cursor};
 use std::str;
-use super::utils::Result as Result;
-use super::utils::ConsumerUpdate;
-
 
 pub fn read_str<'a>(rdr: &'a mut Cursor<&[u8]>) -> Result<&'a str> {
     let len = (rdr.read_i16::<BigEndian>())? as usize;

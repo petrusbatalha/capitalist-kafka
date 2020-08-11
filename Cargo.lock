@@ -76,6 +76,7 @@ dependencies = [
  "config",
  "error-chain",
  "futures",
+ "lazy_static",
  "log",
  "rdkafka",
  "serde 1.0.114",
