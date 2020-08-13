@@ -9,16 +9,16 @@ pub enum ConsumerUpdate {
         partition: i32,
         offset: i64,
     },
-    OffsetTombstone {
-        group: String,
-        topic: String,
-        partition: i32,
-    },
     GroupOffsetLag {
         group: String,
         topic: String,
         partition: i32,
         offset: i64,
-        partition_lag: i64,
+        lag: i64,
+    },
+    OffsetTombstone {
+        group: String,
+        topic: String,
+        partition: i32,
     },
 }
