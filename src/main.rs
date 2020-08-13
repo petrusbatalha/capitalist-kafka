@@ -2,7 +2,7 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use helpers::parser::parse_message;
 use helpers::reader::read_config;
-use helpers::utils::{ConsumerUpdate, Result};
+use helpers::utils::{OffsetRecord, Result};
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::Consumer;
@@ -10,27 +10,14 @@ use rdkafka::message::{Message, OwnedMessage};
 use std::time::Duration;
 mod helpers;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct ConsumerOffsetKey {
-    group: String,
-    topic: String,
-    partition: i32,
-}
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
-struct TopicPartitionKey {
-    topic: String,
-    partition: i32,
-}
-
 async fn fetch_highwatermarks(
     config: (ClientConfig, String),
     owned_message: OwnedMessage,
-) -> Result<ConsumerUpdate> {
+) -> Result<OffsetRecord> {
     let key = owned_message.key().unwrap_or(&[]);
     let payload = owned_message.payload().unwrap_or(&[]);
     match parse_message(key, payload) {
-        Ok(ConsumerUpdate::OffsetCommit {
+        Ok(OffsetRecord::OffsetCommit {
             group,
             topic,
             partition,
@@ -40,7 +27,7 @@ async fn fetch_highwatermarks(
             let high_watermarks = &consumer
                 .fetch_watermarks(&topic, partition, Duration::from_secs(1))
                 .unwrap();
-            Ok(ConsumerUpdate::GroupOffsetLag {
+            Ok(OffsetRecord::GroupOffsetLag {
                 group: group,
                 topic: topic,
                 partition: partition,
@@ -48,7 +35,7 @@ async fn fetch_highwatermarks(
                 lag: high_watermarks.1 - offset,
             })
         }
-        Ok(_) => Ok(ConsumerUpdate::Metadata),
+        Ok(_) => Ok(OffsetRecord::Metadata),
         Err(e) => return Err(e),
     }
 }

@@ -1,4 +1,4 @@
-use super::utils::ConsumerUpdate;
+use super::utils::OffsetRecord;
 use super::utils::Result;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{BufRead, Cursor};
@@ -19,21 +19,21 @@ pub fn read_string(rdr: &mut Cursor<&[u8]>) -> Result<String> {
 fn parse_group_offset(
     key_rdr: &mut Cursor<&[u8]>,
     payload_rdr: &mut Cursor<&[u8]>,
-) -> Result<ConsumerUpdate> {
+) -> Result<OffsetRecord> {
     let group = read_string(key_rdr)?;
     let topic = read_string(key_rdr)?;
     let partition = key_rdr.read_i32::<BigEndian>()?;
     if !payload_rdr.get_ref().is_empty() {
         let _version = payload_rdr.read_i16::<BigEndian>()?;
         let offset = payload_rdr.read_i64::<BigEndian>()?;
-        Ok(ConsumerUpdate::OffsetCommit {
+        Ok(OffsetRecord::OffsetCommit {
             group,
             topic,
             partition,
             offset,
         })
     } else {
-        Ok(ConsumerUpdate::OffsetTombstone {
+        Ok(OffsetRecord::OffsetTombstone {
             group,
             topic,
             partition,
@@ -41,12 +41,12 @@ fn parse_group_offset(
     }
 }
 
-pub fn parse_message(key: &[u8], payload: &[u8]) -> Result<ConsumerUpdate> {
+pub fn parse_message(key: &[u8], payload: &[u8]) -> Result<OffsetRecord> {
     let mut key_rdr = Cursor::new(key);
     let key_version = key_rdr.read_i16::<BigEndian>()?;
     match key_version {
         0 | 1 => parse_group_offset(&mut key_rdr, &mut Cursor::new(payload)),
-        2 => Ok(ConsumerUpdate::Metadata),
+        2 => Ok(OffsetRecord::Metadata),
         _ => panic!(),
     }
 }
