@@ -25,8 +25,8 @@ async fn fetch_highwatermarks(
         }) => {
             let consumer: StreamConsumer = config.create().unwrap();
             let high_watermarks = &consumer
-                .fetch_watermarks(&topic, partition, Duration::from_secs(1))
-                .unwrap();
+                .fetch_watermarks(&topic, partition, Duration::from_millis(1000))
+                .expect("TIME OUT FETCHING WATERMARKS");
             Ok(OffsetRecord::GroupOffsetLag {
                 group: group,
                 topic: topic,
@@ -64,9 +64,8 @@ async fn consume(config: ClientConfig) {
 
 #[tokio::main]
 async fn main() {
-    let config = read_config();
     (0..2 as usize)
-        .map(|_| tokio::spawn(consume(config.clone())))
+        .map(|_| tokio::spawn(consume(read_config())))
         .collect::<FuturesUnordered<_>>()
         .for_each(|_| async { () })
         .await
