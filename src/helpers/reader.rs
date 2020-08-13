@@ -3,17 +3,13 @@ use rdkafka::config::ClientConfig;
 use std::collections::HashMap;
 extern crate config;
 
-pub fn read_config() -> (ClientConfig, String) {
+pub fn read_config() -> ClientConfig {
     let mut kafka_config = ClientConfig::new();
     let mut settings = config::Config::new();
     settings
         .merge(config::File::with_name("config/local.toml"))
         .unwrap();
 
-    let topics = match settings.get_str("topics") {
-        Ok(t) => t,
-        Err(e) => panic!(e),
-    };
     let settings = settings.try_into::<HashMap<String, Value>>().unwrap();
 
     for (config_key, config_value) in settings {
@@ -26,5 +22,5 @@ pub fn read_config() -> (ClientConfig, String) {
         };
     }
     kafka_config.set("enable.auto.commit", "false");
-    (kafka_config, topics)
+    kafka_config
 }

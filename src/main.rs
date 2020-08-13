@@ -11,7 +11,7 @@ use std::time::Duration;
 mod helpers;
 
 async fn fetch_highwatermarks(
-    config: (ClientConfig, String),
+    config: ClientConfig,
     owned_message: OwnedMessage,
 ) -> Result<OffsetRecord> {
     let key = owned_message.key().unwrap_or(&[]);
@@ -23,7 +23,7 @@ async fn fetch_highwatermarks(
             partition,
             offset,
         }) => {
-            let consumer: StreamConsumer = config.0.create().unwrap();
+            let consumer: StreamConsumer = config.create().unwrap();
             let high_watermarks = &consumer
                 .fetch_watermarks(&topic, partition, Duration::from_secs(1))
                 .unwrap();
@@ -40,8 +40,8 @@ async fn fetch_highwatermarks(
     }
 }
 
-async fn consume(config: (ClientConfig, String)) {
-    let consumer: StreamConsumer = config.0.create().unwrap();
+async fn consume(config: ClientConfig) {
+    let consumer: StreamConsumer = config.create().unwrap();
     consumer
         .subscribe(&["__consumer_offsets"])
         .expect("Can't subscribe to specified topic");
