@@ -47,6 +47,7 @@ dependencies = [
  "config",
  "futures",
  "lazy_static",
+ "log",
  "num_cpus",
  "rdkafka",
  "serde 1.0.114",
