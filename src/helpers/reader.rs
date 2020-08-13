@@ -13,9 +13,6 @@ pub fn read_config() -> ClientConfig {
     let settings = settings.try_into::<HashMap<String, Value>>().unwrap();
 
     for (config_key, config_value) in settings {
-        if config_key == "topics" {
-            continue;
-        }
         match config_value.into_str() {
             Ok(v) => kafka_config.set(&config_key.replace("_", "."), &v),
             Err(_) => continue,
