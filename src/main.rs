@@ -1,3 +1,4 @@
+extern crate num_cpus;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use helpers::parser::parse_message;
@@ -52,9 +53,7 @@ async fn consume(config: ClientConfig) {
                 let owned_message = message.detach();
                 let lag = tokio::task::spawn_blocking(|| {
                     fetch_highwatermarks(owned_config, owned_message)
-                })
-                .await
-                .expect("Impossible to calculate lag.");
+                }).await.expect("Impossible to calculate lag.");
                 println!("{:?}", lag.await);
             }
             Err(e) => println!("{:?}", e),
@@ -64,7 +63,7 @@ async fn consume(config: ClientConfig) {
 
 #[tokio::main]
 async fn main() {
-    (0..2 as usize)
+    (0..num_cpus::get() as usize)
         .map(|_| tokio::spawn(consume(read_config())))
         .collect::<FuturesUnordered<_>>()
         .for_each(|_| async { () })

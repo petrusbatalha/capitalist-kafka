@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 lazy_static = "1.4.0"
+num_cpus = "1.13.0"
 futures = "0.3"
 byteorder = "1.0.0"
 config = "0.10.1"
