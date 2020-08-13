@@ -54,7 +54,7 @@ async fn consume(config: ClientConfig) {
                     fetch_highwatermarks(owned_config, owned_message)
                 })
                 .await
-                .expect("nao foi possivel calcular o lag");
+                .expect("Impossible to calculate lag.");
                 println!("{:?}", lag.await);
             }
             Err(e) => println!("{:?}", e),
