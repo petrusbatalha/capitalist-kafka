@@ -65,7 +65,7 @@ async fn consume(config: ClientConfig) {
     let consumer: StreamConsumer = config.create().unwrap();
     consumer
         .subscribe(&["__consumer_offsets"])
-        .expect("Can't subscribe to __consumer_offset topic. ERR: {}");
+        .expect("Can't subscribe to __consumer_offset topic. ERR");
     let stream_processor = consumer.start().try_for_each(|borrowed_message| {
         let owned_config = config.to_owned();
         async move {

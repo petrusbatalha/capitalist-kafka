@@ -15,4 +15,4 @@ byteorder = "1.0.0"
 config = "0.10.1"
 tokio = { version = "0.2", features = ["macros", "blocking", "rt-core"]}
 serde = { version = "1.0.114", features = ["derive"] }
-rdkafka = { version = "0.24", features = ["cmake-build", "ssl", "gssapi"] }
+rdkafka = { version = "0.24", features = ["ssl", "cmake-build", "gssapi-vendored"]}
