@@ -33,6 +33,7 @@ fn create_log() -> slog::Logger {
 fn fetch_highwatermarks(config: ClientConfig, owned_message: OwnedMessage) {
     let key = owned_message.key().unwrap_or(&[]);
     let payload = owned_message.payload().unwrap_or(&[]);
+    info!(LOG, "Fetching watermarks...");
     match parse_message(key, payload) {
         Ok(OffsetRecord::OffsetCommit {
             group,
@@ -63,6 +64,7 @@ fn fetch_highwatermarks(config: ClientConfig, owned_message: OwnedMessage) {
 
 async fn consume(config: ClientConfig) {
     let consumer: StreamConsumer = config.create().unwrap();
+    info!(LOG, "Kafka config -> {:?}", config);
     consumer
         .subscribe(&["__consumer_offsets"])
         .expect("Can't subscribe to __consumer_offset topic. ERR");

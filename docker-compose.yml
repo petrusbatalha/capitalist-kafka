@@ -1,4 +1,4 @@
-version: '2'
+version: "3"
 
 services:
   zookeeper:
@@ -21,9 +21,10 @@ services:
       - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
     depends_on:
       - zookeeper
-
 volumes:
   zookeeper_data:
     driver: local
   kafka_data:
+    driver: local
+  capitalist_data:
     driver: local
