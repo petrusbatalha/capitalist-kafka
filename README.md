@@ -1,0 +1,1 @@
+### Command to run --> docker run -v ${PWD}/config:/config capitalist:0.0.3
