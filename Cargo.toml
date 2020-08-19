@@ -5,6 +5,8 @@ authors = ["Petrus Batalha <petrus.batalha1@ibm.com>"]
 edition = "2018"
 
 [dependencies]
+prometheus = { version = "0.9", features = ["nightly"] }
+hyper = "0.13.7"
 slog = "2.5.2"
 slog-term = "2.6.0"
 slog-async = "2.5.0"
@@ -13,6 +15,6 @@ num_cpus = "1.13.0"
 futures = "0.3"
 byteorder = "1.0.0"
 config = "0.10.1"
-tokio = { version = "0.2", features = ["macros", "blocking", "rt-core"]}
+tokio = { version = "0.2", features = ["macros", "blocking", "rt-core", "net"]}
 serde = { version = "1.0.114", features = ["derive"] }
 rdkafka = { version = "0.24", features = ["ssl", "cmake-build", "gssapi-vendored"]}

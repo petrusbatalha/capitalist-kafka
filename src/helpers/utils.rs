@@ -14,11 +14,4 @@ pub enum OffsetRecord {
         partition: i32,
         offset: i64,
     },
-    GroupOffsetLag {
-        group: String,
-        topic: String,
-        partition: i32,
-        offset: i64,
-        lag: i64,
-    },
 }

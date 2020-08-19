@@ -26,5 +26,3 @@ volumes:
     driver: local
   kafka_data:
     driver: local
-  capitalist_data:
-    driver: local
