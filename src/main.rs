@@ -16,7 +16,7 @@ use std::time::Duration;
 use hyper::http::StatusCode;
 use prometheus::{GaugeVec, TextEncoder, Opts, Registry, Encoder};
 use std::sync::Mutex;
-use std::net::{Ipv4Addr, SocketAddr, IpAddr};
+use std::net::{SocketAddr};
 use slog::*;
 extern crate prometheus;
 use hyper::{service::{make_service_fn, service_fn}, Body, Request, Response, Server,};
