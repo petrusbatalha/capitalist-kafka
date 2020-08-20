@@ -1,25 +1,27 @@
 #[macro_use]
 extern crate lazy_static;
-extern crate slog_term;
 extern crate num_cpus;
 extern crate slog_async;
+extern crate slog_term;
 use futures::TryStreamExt;
 use helpers::parser::parse_message;
-use std::convert::Infallible;
 use helpers::reader::read_config;
 use helpers::utils::OffsetRecord;
-use rdkafka::config::ClientConfig;
+use hyper::http::StatusCode;
+use prometheus::{Encoder, GaugeVec, Opts, Registry, TextEncoder};
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::Consumer;
 use rdkafka::message::{Message, OwnedMessage};
-use std::time::Duration;
-use hyper::http::StatusCode;
-use prometheus::{GaugeVec, TextEncoder, Opts, Registry, Encoder};
-use std::sync::Mutex;
-use std::net::{SocketAddr};
 use slog::*;
+use std::convert::Infallible;
+use std::net::SocketAddr;
+use std::sync::Mutex;
+use std::time::Duration;
 extern crate prometheus;
-use hyper::{service::{make_service_fn, service_fn}, Body, Request, Response, Server,};
+use hyper::{
+    service::{make_service_fn, service_fn},
+    Body, Request, Response, Server,
+};
 mod helpers;
 
 lazy_static! {
@@ -31,7 +33,8 @@ lazy_static! {
         registry.register(Box::new(lag_gauge.clone())).unwrap();
         (registry, lag_gauge)
     };
-    static ref METRICS: Mutex<Vec<u8>> = Mutex::new(vec![]);
+    static ref METRICS: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(10000));
+    static ref WATERMARK_CONSUMER: StreamConsumer = read_config().create().unwrap();
 }
 
 fn create_log() -> slog::Logger {
@@ -41,9 +44,10 @@ fn create_log() -> slog::Logger {
     slog::Logger::root(drain, o!())
 }
 
-fn fetch_highwatermarks(config: ClientConfig, owned_message: OwnedMessage) {
+fn fetch_highwatermarks(owned_message: OwnedMessage) {
     let key = owned_message.key().unwrap_or(&[]);
     let payload = owned_message.payload().unwrap_or(&[]);
+
     info!(LOG, "Fetching watermarks...");
     match parse_message(key, payload) {
         Ok(OffsetRecord::OffsetCommit {
@@ -52,25 +56,32 @@ fn fetch_highwatermarks(config: ClientConfig, owned_message: OwnedMessage) {
             partition,
             offset,
         }) => {
-            let consumer: StreamConsumer = config.create().unwrap();
             let mut buffer = Vec::<u8>::new();
-            match &consumer.fetch_watermarks(&topic, partition, Duration::from_millis(1000)) {
+            match &WATERMARK_CONSUMER.fetch_watermarks(
+                &topic,
+                partition,
+                Duration::from_millis(1000),
+            ) {
                 Ok(hwms) => {
                     let partition = &*partition.to_string();
                     let mut lag_labels = Vec::new();
                     lag_labels.push(&*topic);
                     lag_labels.push(partition);
                     lag_labels.push(&*group);
-                    KAFKA_LAG_METRIC.1.with_label_values(&lag_labels).set((hwms.1 - offset) as f64);
+                    KAFKA_LAG_METRIC
+                        .1
+                        .with_label_values(&lag_labels)
+                        .set((hwms.1 - offset) as f64);
                     let metric_families = KAFKA_LAG_METRIC.0.gather();
                     let encoder = TextEncoder::new();
                     &encoder.encode(&metric_families, &mut buffer);
+                    if METRICS.lock().unwrap().len() > 10000 {
+                        METRICS.lock().unwrap().clear();
+                    }
                     METRICS.lock().unwrap().append(&mut buffer);
                     buffer.clear();
                 }
-                Err(e) => {
-                    warn!(LOG, "Error to process High Topic Watermarks, {}", e)
-                }
+                Err(e) => warn!(LOG, "Error to process High Topic Watermarks, {}", e),
             }
         }
         _ => (),
@@ -94,43 +105,44 @@ async fn get_lag_metrics(_req: Request<Body>) -> std::result::Result<Response<Bo
             Err(err) => {
                 error!(LOG, "internal server error {:?}", err);
                 Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(hyper::Body::empty())
-                .unwrap()
-            },
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(hyper::Body::empty())
+                    .unwrap()
+            }
         };
         Ok(resp)
     }
 }
 
-async fn consume(config: ClientConfig) {
-    let consumer: StreamConsumer = config.create().unwrap();
-    info!(LOG, "Kafka config -> {:?}", config);
-    consumer.subscribe(&["__consumer_offsets"]).expect("Can't subscribe to __consumer_offset topic. ERR");
-    let stream_processor = consumer.start().try_for_each(|borrowed_message| {
-        let owned_config = config.to_owned();
-        async move {
+async fn consume() {
+    let consumer: StreamConsumer = read_config().create().unwrap();
+    consumer
+        .subscribe(&["__consumer_offsets"])
+        .expect("Can't subscribe to __consumer_offset topic. ERR");
+    let stream_processor = consumer
+        .start()
+        .try_for_each(|borrowed_message| async move {
             let owned_message = borrowed_message.detach();
             tokio::spawn(async move {
-                tokio::task::spawn_blocking(|| fetch_highwatermarks(owned_config, owned_message))
+                tokio::task::spawn_blocking(|| fetch_highwatermarks(owned_message))
                     .await
                     .expect("Failed to calculate lag");
             });
             Ok(())
-        }
-    });
-    stream_processor.await.expect("Failed to start stream consumer.");
+        });
+    stream_processor
+        .await
+        .expect("Failed to start stream consumer.");
 }
 
 #[tokio::main]
 async fn main() {
     let socket_addr = SocketAddr::from(([127, 0, 0, 1], 32666));
 
-    let _consume = tokio::task::spawn(consume(read_config()));
+    let _consume = tokio::task::spawn(consume());
 
-    let service = make_service_fn(|_conn| async {
-            Ok::<_, Infallible>(service_fn(get_lag_metrics))
-    });
+    let service =
+        make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(get_lag_metrics)) });
 
     let server = Server::bind(&socket_addr).serve(service);
     info!(LOG, "starting exporter on http://{:?}", socket_addr);
