@@ -3,7 +3,7 @@ use rdkafka::config::ClientConfig;
 use std::collections::HashMap;
 extern crate config;
 
-pub fn read_config() -> ClientConfig {
+pub fn read() -> ClientConfig {
     let mut kafka_config = ClientConfig::new();
     let mut settings = config::Config::new();
     settings
