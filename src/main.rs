@@ -5,7 +5,7 @@ extern crate slog_async;
 extern crate slog_term;
 use futures::TryStreamExt;
 use helpers::parser::parse_message;
-use helpers::reader::read_config;
+use helpers::config_reader::read;
 use helpers::utils::OffsetRecord;
 use hyper::http::StatusCode;
 use prometheus::{Encoder, GaugeVec, Opts, Registry, TextEncoder};
@@ -24,6 +24,8 @@ use hyper::{
 };
 mod helpers;
 
+const BUFFER_CAPACITY: usize = 10000;
+
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
     static ref KAFKA_LAG_METRIC: (Registry, GaugeVec) = {
@@ -33,8 +35,8 @@ lazy_static! {
         registry.register(Box::new(lag_gauge.clone())).unwrap();
         (registry, lag_gauge)
     };
-    static ref METRICS: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(10000));
-    static ref WATERMARK_CONSUMER: StreamConsumer = read_config().create().unwrap();
+    static ref METRICS: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(BUFFER_CAPACITY));
+    static ref WATERMARK_CONSUMER: StreamConsumer = read().create().unwrap();
 }
 
 fn create_log() -> slog::Logger {
@@ -75,7 +77,7 @@ fn fetch_highwatermarks(owned_message: OwnedMessage) {
                     let metric_families = KAFKA_LAG_METRIC.0.gather();
                     let encoder = TextEncoder::new();
                     &encoder.encode(&metric_families, &mut buffer);
-                    if METRICS.lock().unwrap().len() > 10000 {
+                    if METRICS.lock().unwrap().len() > BUFFER_CAPACITY {
                         METRICS.lock().unwrap().clear();
                     }
                     METRICS.lock().unwrap().append(&mut buffer);
@@ -115,7 +117,7 @@ async fn get_lag_metrics(_req: Request<Body>) -> std::result::Result<Response<Bo
 }
 
 async fn consume() {
-    let consumer: StreamConsumer = read_config().create().unwrap();
+    let consumer: StreamConsumer = read().create().unwrap();
     consumer
         .subscribe(&["__consumer_offsets"])
         .expect("Can't subscribe to __consumer_offset topic. ERR");
@@ -130,9 +132,7 @@ async fn consume() {
             });
             Ok(())
         });
-    stream_processor
-        .await
-        .expect("Failed to start stream consumer.");
+    stream_processor.await.expect("Failed to start stream consumer.");
 }
 
 #[tokio::main]
