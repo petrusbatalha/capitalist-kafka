@@ -78,6 +78,7 @@ name = "capitalist"
 version = "0.1.0"
 dependencies = [
  "byteorder",
+ "chrono",
  "config",
  "futures",
  "hyper",

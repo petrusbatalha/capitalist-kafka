@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 prometheus = { version = "0.9", features = ["nightly"] }
+chrono = "0.4"
 hyper = "0.13.7"
 slog = "2.5.2"
 slog-term = "2.6.0"

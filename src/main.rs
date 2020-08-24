@@ -3,39 +3,29 @@ extern crate lazy_static;
 extern crate num_cpus;
 extern crate slog_async;
 extern crate slog_term;
+use exporters::exporter::{push_metrics, retrieve_metrics};
 use futures::TryStreamExt;
-use helpers::parser::parse_message;
 use helpers::config_reader::read;
+use helpers::parser::parse_message;
 use helpers::utils::OffsetRecord;
 use hyper::http::StatusCode;
-use prometheus::{Encoder, GaugeVec, Opts, Registry, TextEncoder};
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::Consumer;
 use rdkafka::message::{Message, OwnedMessage};
 use slog::*;
 use std::convert::Infallible;
 use std::net::SocketAddr;
-use std::sync::Mutex;
 use std::time::Duration;
 extern crate prometheus;
 use hyper::{
     service::{make_service_fn, service_fn},
     Body, Request, Response, Server,
 };
+mod exporters;
 mod helpers;
-
-const BUFFER_CAPACITY: usize = 10000;
 
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
-    static ref KAFKA_LAG_METRIC: (Registry, GaugeVec) = {
-        let registry = Registry::new();
-        let lag_opts = Opts::new("kafka_consumergroup_lag", "Lag for a consumer group.");
-        let lag_gauge = GaugeVec::new(lag_opts, &["topic", "partition", "group"]).unwrap();
-        registry.register(Box::new(lag_gauge.clone())).unwrap();
-        (registry, lag_gauge)
-    };
-    static ref METRICS: Mutex<Vec<u8>> = Mutex::new(Vec::with_capacity(BUFFER_CAPACITY));
     static ref WATERMARK_CONSUMER: StreamConsumer = read().create().unwrap();
 }
 
@@ -47,6 +37,7 @@ fn create_log() -> slog::Logger {
 }
 
 fn fetch_highwatermarks(owned_message: OwnedMessage) {
+    let timestamp = owned_message.timestamp();
     let key = owned_message.key().unwrap_or(&[]);
     let payload = owned_message.payload().unwrap_or(&[]);
 
@@ -58,30 +49,21 @@ fn fetch_highwatermarks(owned_message: OwnedMessage) {
             partition,
             offset,
         }) => {
-            let mut buffer = Vec::<u8>::new();
             match &WATERMARK_CONSUMER.fetch_watermarks(
                 &topic,
                 partition,
                 Duration::from_millis(1000),
             ) {
                 Ok(hwms) => {
-                    let partition = &*partition.to_string();
-                    let mut lag_labels = Vec::new();
-                    lag_labels.push(&*topic);
-                    lag_labels.push(partition);
-                    lag_labels.push(&*group);
-                    KAFKA_LAG_METRIC
-                        .1
-                        .with_label_values(&lag_labels)
-                        .set((hwms.1 - offset) as f64);
-                    let metric_families = KAFKA_LAG_METRIC.0.gather();
-                    let encoder = TextEncoder::new();
-                    &encoder.encode(&metric_families, &mut buffer);
-                    if METRICS.lock().unwrap().len() > BUFFER_CAPACITY {
-                        METRICS.lock().unwrap().clear();
-                    }
-                    METRICS.lock().unwrap().append(&mut buffer);
-                    buffer.clear();
+                    let lag = hwms.1 - offset;
+                    push_metrics(OffsetRecord::GroupOffsetLag {
+                        group,
+                        topic,
+                        partition,
+                        offset,
+                        lag,
+                        timestamp,
+                    })
                 }
                 Err(e) => warn!(LOG, "Error to process High Topic Watermarks, {}", e),
             }
@@ -102,7 +84,7 @@ async fn get_lag_metrics(_req: Request<Body>) -> std::result::Result<Response<Bo
             .body(hyper::Body::empty())
             .unwrap())
     } else {
-        let resp = match Response::builder().body(Body::from(METRICS.lock().unwrap().clone())) {
+        let resp = match Response::builder().body(Body::from(retrieve_metrics())) {
             Ok(r) => r,
             Err(err) => {
                 error!(LOG, "internal server error {:?}", err);
@@ -132,7 +114,9 @@ async fn consume() {
             });
             Ok(())
         });
-    stream_processor.await.expect("Failed to start stream consumer.");
+    stream_processor
+        .await
+        .expect("Failed to start stream consumer.");
 }
 
 #[tokio::main]
