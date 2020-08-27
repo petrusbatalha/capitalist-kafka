@@ -16,7 +16,6 @@ use slog::*;
 use std::time::Duration;
 
 lazy_static! {
-    static ref WATERMARK_CONSUMER: StreamConsumer = read().create().unwrap();
     static ref LOG: slog::Logger = create_log();
 }
 
@@ -36,9 +35,10 @@ pub async fn consume() {
     let stream_processor = consumer
         .start()
         .try_for_each(|borrowed_message| async move {
+            info!(LOG, "Fetching watermarks...");
             let owned_message = borrowed_message.detach();
             tokio::spawn(async move {
-                tokio::task::spawn_blocking(move || fetch_highwatermarks(owned_message))
+                tokio::task::spawn_blocking(|| push_group_data(owned_message))
                     .await
                     .expect("Failed to calculate lag");
             });
@@ -49,12 +49,28 @@ pub async fn consume() {
         .expect("Failed to start stream consumer.");
 }
 
-fn fetch_highwatermarks(owned_message: OwnedMessage) {
+pub async fn fetch_watermarks() {
+    let watermark_consumer: StreamConsumer = read().create().unwrap();
+    let metadata = watermark_consumer.fetch_metadata(None, Duration::from_secs(1)).expect("errou");
+    for topic in metadata.topics() {
+        let partitions: i32 = topic.partitions().len() as i32;
+        for p in 0..partitions {
+            let hwms =
+                watermark_consumer.fetch_watermarks(topic.name(), p, Duration::from_millis(100)).unwrap();
+            println!(
+                "Topic {}, Partition: {} , HWMS: {}",
+                topic.name(),
+                p,
+                hwms.1
+            );
+        }
+    }
+}
+
+fn push_group_data(owned_message: OwnedMessage) {
     let timestamp = owned_message.timestamp();
     let key = owned_message.key().unwrap_or(&[]);
     let payload = owned_message.payload().unwrap_or(&[]);
-
-    info!(LOG, "Fetching watermarks...");
     match parse_message(key, payload) {
         Ok(OffsetRecord::OffsetCommit {
             group,
@@ -62,30 +78,15 @@ fn fetch_highwatermarks(owned_message: OwnedMessage) {
             partition,
             offset,
         }) => {
-            match &WATERMARK_CONSUMER.fetch_watermarks(
-                &topic,
-                partition,
-                Duration::from_millis(1000),
-            ) {
-                Ok(hwms) => {
-                    let key = LagKey::new(group.clone(), topic.clone(), partition.clone());
-                    let payload = LagPayload::new(
-                        group,
-                        topic,
-                        partition,
-                        parse_date(timestamp),
-                        offset,
-                        hwms.1,
-                        hwms.1 - offset,
-                    );
-                    put_lag(key, payload);
-                }
-                Err(e) => warn!(LOG, "Error to process High Topic Watermarks, {}", e),
-            }
-        }
+            let group_key = LagKey::new(group, topic, partition);
+            let group_payload = LagPayload::new(offset, parse_date(timestamp));
+            put_lag(bincode::serialize(&group_key).unwrap(), bincode::serialize(&group_payload).unwrap());
+        },
+        Err(e) => warn!(LOG, "Error to process High Topic Watermarks, {}", e),
         _ => (),
     }
 }
+
 
 fn parse_date(timestamp: Timestamp) -> String {
     let t = timestamp.to_millis();

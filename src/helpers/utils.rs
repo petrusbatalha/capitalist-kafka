@@ -30,33 +30,18 @@ impl fmt::Display for LagKey {
 
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub struct LagPayload {
-    group: String,
-    topic: String,
-    partition: i32,
-    commit_timestamp: String,
     group_offset: i64,
-    topic_offset: i64,
-    lag: i64,
+    commit_timestamp: String,
 }
 
 impl LagPayload {
     pub fn new(
-        group: String,
-        topic: String,
-        partition: i32,
-        commit_timestamp: String,
         group_offset: i64,
-        topic_offset: i64,
-        lag: i64,
+        commit_timestamp: String,
     ) -> Self {
         LagPayload {
-            group: group,
-            topic: topic,
-            partition: partition,
-            commit_timestamp: commit_timestamp,
             group_offset: group_offset,
-            topic_offset: topic_offset,
-            lag: lag,
+            commit_timestamp: commit_timestamp,
         }
     }
 }
@@ -65,8 +50,8 @@ impl fmt::Display for LagPayload {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Group: {}, Topic: {}, Partition: {}, Commit Timestamp: {}, Group Offset: {}, Topic_offset: {}, lag: {}",
-            self.group, self.topic, self.partition, self.commit_timestamp, self.group_offset, self.topic_offset, self.lag
+            "Group Offset: {}, Commit Timestamp: {}, ",
+            self.group_offset, self.commit_timestamp
         )
     }
 }
