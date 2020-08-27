@@ -1,15 +1,19 @@
+extern crate bincode;
 extern crate slog_async;
 extern crate slog_term;
-use crate::helpers::parser::parse_message;
 use crate::helpers::config_reader::read;
-use crate::helpers::utils::OffsetRecord;
-use crate::exporters::exporter::push_metrics;
+use crate::helpers::parser::parse_message;
+use crate::helpers::utils::{LagKey, LagPayload, OffsetRecord};
+use crate::store::lag_store::put_lag;
+use chrono::prelude::*;
+use chrono::Utc;
 use futures::TryStreamExt;
-use slog::*;
-use std::time::Duration;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::Consumer;
+use rdkafka::message::Timestamp;
 use rdkafka::message::{Message, OwnedMessage};
+use slog::*;
+use std::time::Duration;
 
 lazy_static! {
     static ref WATERMARK_CONSUMER: StreamConsumer = read().create().unwrap();
@@ -28,11 +32,13 @@ pub async fn consume() {
     consumer
         .subscribe(&["__consumer_offsets"])
         .expect("Can't subscribe to __consumer_offset topic. ERR");
+
     let stream_processor = consumer
-        .start().try_for_each(|borrowed_message| async move {
+        .start()
+        .try_for_each(|borrowed_message| async move {
             let owned_message = borrowed_message.detach();
             tokio::spawn(async move {
-                tokio::task::spawn_blocking(|| fetch_highwatermarks(owned_message))
+                tokio::task::spawn_blocking(move || fetch_highwatermarks(owned_message))
                     .await
                     .expect("Failed to calculate lag");
             });
@@ -62,19 +68,28 @@ fn fetch_highwatermarks(owned_message: OwnedMessage) {
                 Duration::from_millis(1000),
             ) {
                 Ok(hwms) => {
-                    let lag = hwms.1 - offset;
-                    push_metrics(OffsetRecord::GroupOffsetLag {
+                    let key = LagKey::new(group.clone(), topic.clone(), partition.clone());
+                    let payload = LagPayload::new(
                         group,
                         topic,
                         partition,
+                        parse_date(timestamp),
                         offset,
-                        lag,
-                        timestamp,
-                    })
+                        hwms.1,
+                        hwms.1 - offset,
+                    );
+                    put_lag(key, payload);
                 }
                 Err(e) => warn!(LOG, "Error to process High Topic Watermarks, {}", e),
             }
         }
         _ => (),
     }
+}
+
+fn parse_date(timestamp: Timestamp) -> String {
+    let t = timestamp.to_millis();
+    let naive = NaiveDateTime::from_timestamp(t.unwrap() / 1000, 0);
+    let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
 }

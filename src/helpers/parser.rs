@@ -1,8 +1,9 @@
 use super::utils::OffsetRecord;
-use super::utils::Result;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{BufRead, Cursor};
 use std::str;
+
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub fn read_str<'a>(rdr: &'a mut Cursor<&[u8]>) -> Result<&'a str> {
     let len = (rdr.read_i16::<BigEndian>())? as usize;

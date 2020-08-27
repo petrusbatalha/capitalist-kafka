@@ -1,16 +1,20 @@
 #[macro_use]
 extern crate lazy_static;
+extern crate bincode;
 extern crate prometheus;
-use std::convert::Infallible;
-use lag_consumer::consume;
-use routers::metrics::get_lag_metrics;
-use std::net::SocketAddr;
+use crate::consumer::lag_consumer::consume;
+use crate::helpers::utils::LagKey;
+use crate::store::lag_store::get_lag;
 use slog::*;
-use hyper::{service::{make_service_fn, service_fn}, Server};
-mod routers;
-mod exporters;
-mod lag_consumer;
+use std::convert::From;
+use warp::hyper::Body;
+use warp::{
+    http::{Response, StatusCode},
+    Filter,
+};
+mod consumer;
 mod helpers;
+mod store;
 
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
@@ -25,15 +29,19 @@ fn create_log() -> slog::Logger {
 
 #[tokio::main]
 async fn main() {
-    let socket_addr = SocketAddr::from(([127, 0, 0, 1], 32666));
-
     let _consume = tokio::task::spawn(consume());
 
-    let service = make_service_fn(|_conn| async { Ok::<_, Infallible>(service_fn(get_lag_metrics)) });
-
-    let server = Server::bind(&socket_addr).serve(service);
-    info!(LOG, "starting exporter on http://{:?}", socket_addr);
-    if let Err(e) = server.await {
-        error!(LOG, "server error: {}", e);
-    }
+    let lag = warp::path::param()
+        .and(warp::path::param())
+        .and(warp::path::param())
+        .map(|group: String, topic: String, partition: i32| {
+            let key = LagKey::new(group, topic, partition);
+            match get_lag(&key) {
+                Some(v) => Response::builder().body(Body::from(v)),
+                None => Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Body::from("Lag not found")),
+            }
+        });
+    warp::serve(lag).run(([127, 0, 0, 1], 32666)).await;
 }
