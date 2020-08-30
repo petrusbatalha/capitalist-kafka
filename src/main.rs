@@ -2,15 +2,9 @@
 extern crate lazy_static;
 extern crate bincode;
 use crate::consumer::lag_consumer::{calculate_lag, consume};
-use crate::helpers::utils::{GroupKey, TopicPartition};
 use crate::store::lag_store::get;
 use slog::*;
-use std::convert::From;
-use warp::hyper::Body;
-use warp::{
-    http::{Response, StatusCode},
-    Filter,
-};
+use warp::{http::StatusCode, Filter};
 mod consumer;
 mod helpers;
 mod store;

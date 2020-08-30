@@ -1,6 +1,6 @@
 extern crate bincode;
 use crate::helpers::utils::{GroupKey, GroupLag, GroupPayload};
-use rocksdb::{IteratorMode, DB};
+use rocksdb::IteratorMode;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -34,11 +34,11 @@ pub async fn get_all_groups() -> HashMap<GroupKey, GroupPayload> {
         let payload: Result<GroupPayload> = bincode::deserialize(&group_payload);
         let key: Option<GroupKey> = match key {
             Ok(k) => Some(k),
-            Err(e) => None,
+            Err(_) => None,
         };
         let payload: Option<GroupPayload> = match payload {
             Ok(p) => Some(p),
-            Err(e) => None,
+            Err(_) => None,
         };
         match (key, payload) {
             (Some(k), Some(p)) => group_map.insert(k, p),

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{Result, Value};
 use std::fmt;
 
 #[derive(Serialize, Deserialize)]
@@ -22,10 +21,10 @@ impl fmt::Display for GroupLag {
         write!(
             f,
             "Topic: {}, 
-                   Partition: {},
-                   Group: {},
-                   Lag: {},
-                   Last Commit: {}",
+            Partition: {},
+            Group: {},
+            Lag: {},
+            Last Commit: {}",
             self.topic, self.partition, self.group, self.lag, self.last_commit
         )
     }
