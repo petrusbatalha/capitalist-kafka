@@ -3,16 +3,18 @@ extern crate slog_async;
 extern crate slog_term;
 use crate::helpers::config_reader::read;
 use crate::helpers::parser::parse_message;
-use crate::helpers::utils::{LagKey, LagPayload, OffsetRecord};
-use crate::store::lag_store::put_lag;
+use crate::helpers::utils::{GroupKey, GroupLag, GroupPayload, OffsetRecord, TopicPartition};
+use crate::store::lag_store::{get_all_groups, put};
 use chrono::prelude::*;
 use chrono::Utc;
-use futures::TryStreamExt;
+use futures::{join, TryStreamExt};
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::Consumer;
 use rdkafka::message::Timestamp;
 use rdkafka::message::{Message, OwnedMessage};
 use slog::*;
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 lazy_static! {
@@ -49,24 +51,6 @@ pub async fn consume() {
         .expect("Failed to start stream consumer.");
 }
 
-pub async fn fetch_watermarks() {
-    let watermark_consumer: StreamConsumer = read().create().unwrap();
-    let metadata = watermark_consumer.fetch_metadata(None, Duration::from_secs(1)).expect("errou");
-    for topic in metadata.topics() {
-        let partitions: i32 = topic.partitions().len() as i32;
-        for p in 0..partitions {
-            let hwms =
-                watermark_consumer.fetch_watermarks(topic.name(), p, Duration::from_millis(100)).unwrap();
-            println!(
-                "Topic {}, Partition: {} , HWMS: {}",
-                topic.name(),
-                p,
-                hwms.1
-            );
-        }
-    }
-}
-
 fn push_group_data(owned_message: OwnedMessage) {
     let timestamp = owned_message.timestamp();
     let key = owned_message.key().unwrap_or(&[]);
@@ -78,15 +62,59 @@ fn push_group_data(owned_message: OwnedMessage) {
             partition,
             offset,
         }) => {
-            let group_key = LagKey::new(group, topic, partition);
-            let group_payload = LagPayload::new(offset, parse_date(timestamp));
-            put_lag(bincode::serialize(&group_key).unwrap(), bincode::serialize(&group_payload).unwrap());
-        },
+            let group_key = GroupKey::new(group, TopicPartition::new(topic, partition));
+            let group_payload = GroupPayload::new(offset, parse_date(timestamp));
+            put(
+                bincode::serialize(&group_key).unwrap(),
+                bincode::serialize(&group_payload).unwrap(),
+            );
+        }
         Err(e) => warn!(LOG, "Error to process High Topic Watermarks, {}", e),
         _ => (),
     }
 }
 
+pub async fn calculate_lag() {
+    let groups_future = get_all_groups();
+    let hwms_future = get_hwms();
+    let result = join!(hwms_future, groups_future);
+    let hwms = result.0;
+    let groups = result.1;
+    let mut all_lag: Vec<GroupLag> = Vec::new();
+    for (k, v) in groups {
+        let topic_hwms = hwms.get(&k.topic_partition);
+        let group_lag = GroupLag {
+            topic: k.topic_partition.topic,
+            partition: k.topic_partition.partition,
+            group: k.group,
+            lag: topic_hwms.unwrap() - v.group_offset,
+            last_commit: v.commit_timestamp,
+        };
+        all_lag.push(group_lag);
+    }
+    put(
+        b"last_calculated_lag".to_vec(),
+        bincode::serialize(&all_lag).unwrap(),
+    );
+}
+
+async fn get_hwms() -> HashMap<TopicPartition, i64> {
+    let watermark_consumer: StreamConsumer = read().create().unwrap();
+    let metadata = &watermark_consumer
+        .fetch_metadata(None, Duration::from_secs(1))
+        .expect("errou");
+    let mut topics: HashMap<TopicPartition, i64> = HashMap::new();
+    for topic in metadata.topics() {
+        let partitions_count: i32 = topic.partitions().len() as i32;
+        for p in 0..partitions_count {
+            let hwms = watermark_consumer
+                .fetch_watermarks(&topic.name(), p, Duration::from_millis(100))
+                .unwrap();
+            topics.insert(TopicPartition::new(topic.name().to_string(), p), hwms.1);
+        }
+    }
+    topics
+}
 
 fn parse_date(timestamp: Timestamp) -> String {
     let t = timestamp.to_millis();

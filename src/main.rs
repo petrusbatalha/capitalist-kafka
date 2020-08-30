@@ -1,10 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate bincode;
-extern crate prometheus;
-use crate::consumer::lag_consumer::consume;
-use crate::helpers::utils::LagKey;
-use crate::store::lag_store::get_lag;
+use crate::consumer::lag_consumer::{calculate_lag, consume};
+use crate::helpers::utils::{GroupKey, TopicPartition};
+use crate::store::lag_store::get;
 use slog::*;
 use std::convert::From;
 use warp::hyper::Body;
@@ -29,19 +28,20 @@ fn create_log() -> slog::Logger {
 
 #[tokio::main]
 async fn main() {
-    let _consume = tokio::task::spawn(consume());
+    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
 
-    let lag = warp::path::param()
-        .and(warp::path::param())
-        .and(warp::path::param())
-        .map(|group: String, topic: String, partition: i32| {
-            let key = LagKey::new(group, topic, partition);
-            match get_lag(&key) {
-                Some(v) => Response::builder().body(Body::from(v)),
-                None => Response::builder()
-                    .status(StatusCode::NOT_FOUND)
-                    .body(Body::from("Lag not found")),
-            }
-        });
+    tokio::task::spawn({
+        interval.tick().await;
+        calculate_lag()
+    });
+
+    tokio::task::spawn(consume());
+
+    let lag = warp::path("lag").map(|| match get(b"last_calculated_lag".to_vec()) {
+        Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
+        None => {
+            warp::reply::with_status(warp::reply::json(&"Lag not found"), StatusCode::NOT_FOUND)
+        }
+    });
     warp::serve(lag).run(([127, 0, 0, 1], 32666)).await;
 }

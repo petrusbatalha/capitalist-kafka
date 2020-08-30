@@ -1,58 +1,78 @@
 use serde::{Deserialize, Serialize};
+use serde_json::{Result, Value};
 use std::fmt;
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct LagKey {
-    group: String,
-    topic: String,
-    partition: i32,
+#[derive(Serialize, Deserialize)]
+pub struct AllLag {
+    #[serde(rename = "GroupLag")]
+    group_lag: Vec<GroupLag>,
 }
 
-impl LagKey {
-    pub fn new(group: String, topic: String, partition: i32) -> Self {
-        LagKey {
-            group: group,
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
+pub struct GroupLag {
+    pub topic: String,
+    pub partition: i32,
+    pub group: String,
+    pub lag: i64,
+    pub last_commit: String,
+}
+
+impl fmt::Display for GroupLag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Topic: {}, 
+                   Partition: {},
+                   Group: {},
+                   Lag: {},
+                   Last Commit: {}",
+            self.topic, self.partition, self.group, self.lag, self.last_commit
+        )
+    }
+}
+
+#[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug)]
+pub struct TopicPartition {
+    pub topic: String,
+    pub partition: i32,
+}
+
+impl TopicPartition {
+    pub fn new(topic: String, partition: i32) -> Self {
+        TopicPartition {
             topic: topic,
             partition: partition,
         }
     }
 }
 
-impl fmt::Display for LagKey {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "group: {}, topic: {}, partition: {}",
-            self.group, self.topic, self.partition
-        )
-    }
+#[derive(Eq, Hash, Serialize, Deserialize, PartialEq, Debug)]
+pub struct GroupKey {
+    pub group: String,
+    pub topic_partition: TopicPartition,
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
-pub struct LagPayload {
-    group_offset: i64,
-    commit_timestamp: String,
-}
-
-impl LagPayload {
-    pub fn new(
-        group_offset: i64,
-        commit_timestamp: String,
-    ) -> Self {
-        LagPayload {
-            group_offset: group_offset,
-            commit_timestamp: commit_timestamp,
+impl GroupKey {
+    pub fn new(group: String, topic_partition: TopicPartition) -> Self {
+        GroupKey {
+            group: group,
+            topic_partition: topic_partition,
         }
     }
 }
 
-impl fmt::Display for LagPayload {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "Group Offset: {}, Commit Timestamp: {}, ",
-            self.group_offset, self.commit_timestamp
-        )
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+pub struct GroupPayload {
+    pub group_offset: i64,
+    pub commit_timestamp: String,
+}
+
+impl GroupPayload {
+    pub fn new(group_offset: i64, commit_timestamp: String) -> Self {
+        GroupPayload {
+            group_offset: group_offset,
+            commit_timestamp: commit_timestamp,
+        }
     }
 }
 
