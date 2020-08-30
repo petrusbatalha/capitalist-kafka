@@ -75,6 +75,7 @@ fn push_group_data(owned_message: OwnedMessage) {
 }
 
 pub async fn calculate_lag() {
+    info!(LOG, "CALCULATING MOTHERFUCKING LAG...");
     let groups_future = get_all_groups();
     let hwms_future = get_hwms();
     let result = join!(hwms_future, groups_future);

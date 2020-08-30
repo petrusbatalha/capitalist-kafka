@@ -26,15 +26,17 @@ fn create_log() -> slog::Logger {
     slog::Logger::root(drain, o!())
 }
 
+async fn lag_calc_update() {
+    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
+    loop {
+        interval.tick().await;
+        calculate_lag().await;
+    }
+}
+
 #[tokio::main]
 async fn main() {
-    let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
-
-    tokio::task::spawn({
-        interval.tick().await;
-        calculate_lag()
-    });
-
+    tokio::task::spawn(lag_calc_update());
     tokio::task::spawn(consume());
 
     let lag = warp::path("lag").map(|| match get(b"last_calculated_lag".to_vec()) {
