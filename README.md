@@ -14,8 +14,6 @@ The Capitalist, a cloud-enabled kafka lag exporter. Written in Rust to be blazin
 - Expose metrics on the /metrics endopoint, using Prometheus format.
 
 # License
-###### - Capitalist hum? How much it cost?
-###### - WAIT FOR IT ! IT'S FREE !
 This project is licensed under the MIT License - see the LICENSE.md file for details
 
 ### Warning ! Is just a pet project, don't use in production.
