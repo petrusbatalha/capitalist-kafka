@@ -33,11 +33,13 @@ async fn main() {
     tokio::task::spawn(lag_calc_update());
     tokio::task::spawn(consume());
 
+    let cors = warp::cors().allow_any_origin();
+
     let lag = warp::path("lag").map(|| match get(b"last_calculated_lag".to_vec()) {
         Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
         None => {
             warp::reply::with_status(warp::reply::json(&"Lag not found"), StatusCode::NOT_FOUND)
         }
-    });
+    }).with(cors);
     warp::serve(lag).run(([127, 0, 0, 1], 32666)).await;
 }
