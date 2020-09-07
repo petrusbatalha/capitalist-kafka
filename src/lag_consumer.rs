@@ -1,33 +1,31 @@
 extern crate bincode;
 extern crate slog_async;
 extern crate slog_term;
-use crate::db_client::{DBClient, LagDB};
-use rdkafka::config::ClientConfig;
 use crate::config_reader::read;
-use crate::parser::{parse_message, parse_date};
+use crate::db_client::{DBClient, LagDB};
+use crate::parser::{parse_date, parse_message};
 use crate::types::{Group, TopicPartition};
 use futures::{join, TryStreamExt};
+use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::Consumer;
 use rdkafka::message::{Message, OwnedMessage};
 use slog::*;
-use std::sync::Arc;
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
-    pub static ref LAG_CONSUMER: LagConsumer = 
-    LagConsumer {
-        lag_db: Arc::new(
-            LagDB {
-                lag_db: rocksdb::DB::open_default("/tmp/rocksdb".to_string()).unwrap()
-            }),
+    pub static ref LAG_CONSUMER: LagConsumer = LagConsumer {
+        lag_db: Arc::new(LagDB {
+            lag_db: rocksdb::DB::open_default("/tmp/rocksdb".to_string()).unwrap()
+        }),
         config: read(),
     };
 }
 
-#[derive (Clone)]
+#[derive(Clone)]
 pub struct LagConsumer {
     lag_db: Arc<LagDB>,
     config: ClientConfig,
@@ -39,7 +37,7 @@ impl LagConsumer {
         consumer
             .subscribe(&["__consumer_offsets"])
             .expect("Can't subscribe to __consumer_offset topic. ERR");
-        
+
         let stream_processor = consumer
             .start()
             .try_for_each(|borrowed_message| async move {
@@ -56,7 +54,7 @@ impl LagConsumer {
             .await
             .expect("Failed to start stream consumer.");
     }
-    
+
     fn push_group_data(&self, owned_message: OwnedMessage) {
         let timestamp = owned_message.timestamp();
         let key = owned_message.key().unwrap_or(&[]);
@@ -69,14 +67,11 @@ impl LagConsumer {
                 offset,
             }) => {
                 let group_key = Group::GroupKey {
-                    group: group, 
-                    topic_partition: TopicPartition {
-                        topic,
-                        partition
-                    },
+                    group: group,
+                    topic_partition: TopicPartition { topic, partition },
                 };
                 let group_payload = Group::GroupPayload {
-                    group_offset: offset, 
+                    group_offset: offset,
                     commit_timestamp: parse_date(timestamp),
                 };
                 self.lag_db.put(
@@ -88,7 +83,7 @@ impl LagConsumer {
             _ => (),
         }
     }
-    
+
     async fn calculate_lag(&self) {
         info!(LOG, "CALCULATING LAG...");
         let groups_future = self.lag_db.get_all();
@@ -99,13 +94,16 @@ impl LagConsumer {
         let mut all_lag: Vec<Group> = Vec::new();
         for (k, v) in groups {
             match (k, v) {
-                (Group::GroupKey{
-                    group,
-                    topic_partition,
-                }, Group::GroupPayload{
-                    group_offset,
-                    commit_timestamp
-                }) => {
+                (
+                    Group::GroupKey {
+                        group,
+                        topic_partition,
+                    },
+                    Group::GroupPayload {
+                        group_offset,
+                        commit_timestamp,
+                    },
+                ) => {
                     let topic_hwms = hwms.get(&topic_partition);
                     let group_lag = Group::GroupLag {
                         topic: topic_partition.topic,
@@ -119,12 +117,12 @@ impl LagConsumer {
                         b"last_calculated_lag".to_vec(),
                         bincode::serialize(&all_lag).unwrap(),
                     );
-                },
-                _ => {},  
+                }
+                _ => {}
             }
         }
     }
-    
+
     async fn get_hwms(&self) -> HashMap<TopicPartition, i64> {
         let watermark_consumer: StreamConsumer = read().create().unwrap();
         let metadata = &watermark_consumer

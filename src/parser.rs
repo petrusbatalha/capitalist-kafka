@@ -1,10 +1,10 @@
+use crate::types::Group;
 use byteorder::{BigEndian, ReadBytesExt};
-use std::io::{BufRead, Cursor};
-use std::str;
 use chrono::prelude::*;
 use chrono::Utc;
-use crate::types::{Group};
 use rdkafka::message::Timestamp;
+use std::io::{BufRead, Cursor};
+use std::str;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

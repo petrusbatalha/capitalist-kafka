@@ -1,14 +1,14 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate bincode;
-mod types;
-mod lag_consumer;
-mod db_client;
 mod config_reader;
+mod db_client;
+mod lag_consumer;
 mod parser;
+mod types;
+use lag_consumer::LAG_CONSUMER;
 use slog::*;
 use warp::{http::StatusCode, Filter};
-use lag_consumer::{LAG_CONSUMER};
 
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
@@ -28,9 +28,13 @@ async fn main() {
 
     let cors = warp::cors().allow_any_origin();
 
-    let lag = warp::path("lag").map(move || match LAG_CONSUMER.get_lag() {
-        Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
-        None => warp::reply::with_status(warp::reply::json(&"Lag not found"), StatusCode::NOT_FOUND),
-    }).with(cors);
+    let lag = warp::path("lag")
+        .map(move || match LAG_CONSUMER.get_lag() {
+            Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
+            None => {
+                warp::reply::with_status(warp::reply::json(&"Lag not found"), StatusCode::NOT_FOUND)
+            }
+        })
+        .with(cors);
     warp::serve(lag).run(([127, 0, 0, 1], 32666)).await;
 }

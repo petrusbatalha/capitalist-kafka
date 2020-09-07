@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 extern crate bincode;
-use crate::types::{Group,};
+use crate::types::Group;
 use async_trait::async_trait;
-use rocksdb::DB;
 use rocksdb::IteratorMode;
+use rocksdb::DB;
 
 pub type Result<T> = std::result::Result<T, std::boxed::Box<bincode::ErrorKind>>;
 
@@ -15,7 +15,7 @@ pub struct LagDB {
 pub trait DBClient<T> {
     fn put(&self, k: Vec<u8>, v: Vec<u8>) -> bool;
     fn get(&self, k: Vec<u8>) -> Option<Vec<T>>;
-    async fn get_all(&self)  -> HashMap<T, T>;
+    async fn get_all(&self) -> HashMap<T, T>;
 }
 
 #[async_trait]
@@ -28,13 +28,13 @@ impl DBClient<Group> for LagDB {
         let value = self.lag_db.get(k);
         match value {
             Ok(Some(v)) => {
-                let payload: Vec<Group> = bincode::deserialize(&v).unwrap();                    
+                let payload: Vec<Group> = bincode::deserialize(&v).unwrap();
                 Some(payload)
             }
             _ => None,
         }
     }
-    
+
     async fn get_all(&self) -> HashMap<Group, Group> {
         let iter = self.lag_db.iterator(IteratorMode::Start);
         let mut group_map: HashMap<Group, Group> = HashMap::new();

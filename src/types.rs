@@ -4,8 +4,8 @@ use std::fmt;
 #[derive(Eq, Hash, Serialize, Deserialize, PartialEq, Debug)]
 pub enum Group {
     GroupKey {
-      group: String,
-      topic_partition: TopicPartition,
+        group: String,
+        topic_partition: TopicPartition,
     },
     GroupPayload {
         group_offset: i64,
@@ -36,17 +36,15 @@ impl fmt::Display for Group {
                 group,
                 lag,
                 last_commit,
-            } => {
-                write!(
-                    f,
-                    "Topic: {}, 
+            } => write!(
+                f,
+                "Topic: {}, 
                     Partition: {},
                     Group: {},
                     Lag: {},
                     Last Commit: {}",
-                    topic, partition, group, lag, last_commit
-                )
-            },
+                topic, partition, group, lag, last_commit
+            ),
             _ => Ok(()),
         }
     }
