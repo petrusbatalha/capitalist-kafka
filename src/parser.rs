@@ -1,7 +1,10 @@
-use super::utils::OffsetRecord;
 use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{BufRead, Cursor};
 use std::str;
+use chrono::prelude::*;
+use chrono::Utc;
+use crate::types::{Group};
+use rdkafka::message::Timestamp;
 
 pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -20,34 +23,36 @@ pub fn read_string(rdr: &mut Cursor<&[u8]>) -> Result<String> {
 fn parse_group_offset(
     key_rdr: &mut Cursor<&[u8]>,
     payload_rdr: &mut Cursor<&[u8]>,
-) -> Result<OffsetRecord> {
+) -> Result<Group> {
     let group = read_string(key_rdr)?;
     let topic = read_string(key_rdr)?;
     let partition = key_rdr.read_i32::<BigEndian>()?;
     if !payload_rdr.get_ref().is_empty() {
         let _version = payload_rdr.read_i16::<BigEndian>()?;
         let offset = payload_rdr.read_i64::<BigEndian>()?;
-        Ok(OffsetRecord::OffsetCommit {
+        Ok(Group::OffsetCommit {
             group,
             topic,
             partition,
             offset,
         })
     } else {
-        Ok(OffsetRecord::OffsetTombstone {
-            group,
-            topic,
-            partition,
-        })
+        Ok(Group::None)
     }
 }
 
-pub fn parse_message(key: &[u8], payload: &[u8]) -> Result<OffsetRecord> {
+pub fn parse_message(key: &[u8], payload: &[u8]) -> Result<Group> {
     let mut key_rdr = Cursor::new(key);
     let key_version = key_rdr.read_i16::<BigEndian>()?;
     match key_version {
         0 | 1 => parse_group_offset(&mut key_rdr, &mut Cursor::new(payload)),
-        2 => Ok(OffsetRecord::Metadata),
         _ => panic!(),
     }
+}
+
+pub fn parse_date(timestamp: Timestamp) -> String {
+    let t = timestamp.to_millis();
+    let naive = NaiveDateTime::from_timestamp(t.unwrap() / 1000, 0);
+    let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
+    datetime.format("%Y-%m-%d %H:%M:%S").to_string()
 }
