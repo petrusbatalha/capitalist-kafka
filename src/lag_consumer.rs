@@ -4,8 +4,8 @@ extern crate slog_term;
 use crate::config_reader::read;
 use crate::db_client::{DBClient, LagDB};
 use crate::parser::{parse_date, parse_message};
-use crate::types::{Group, TopicPartition};
-use futures::{join, TryStreamExt};
+use crate::types::{Group, Lag};
+use futures::TryStreamExt;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::consumer::Consumer;
@@ -17,6 +17,7 @@ use std::time::Duration;
 
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
+    static ref WATERMARK_CONSUMER: StreamConsumer = read().create().unwrap();
     pub static ref LAG_CONSUMER: LagConsumer = LagConsumer {
         lag_db: Arc::new(LagDB {
             lag_db: rocksdb::DB::open_default("/tmp/rocksdb".to_string()).unwrap()
@@ -41,7 +42,7 @@ impl LagConsumer {
         let stream_processor = consumer
             .start()
             .try_for_each(|borrowed_message| async move {
-                info!(LOG, "Fetching watermarks...");
+                info!(LOG, "Consuming messages...");
                 let owned_message = borrowed_message.detach();
                 tokio::spawn(async move {
                     tokio::task::spawn_blocking(move || self.push_group_data(owned_message))
@@ -66,91 +67,69 @@ impl LagConsumer {
                 partition,
                 offset,
             }) => {
-                let group_key = Group::GroupKey {
-                    group: group,
-                    topic_partition: TopicPartition { topic, partition },
+                let group_key = Group::GroupKey { group: group };
+                let serialized_group_key = bincode::serialize(&group_key).unwrap();
+                let group_payload: Option<Group> = match self.lag_db.get(serialized_group_key) {
+                    Some(Group::GroupPayload { mut payload, topic }) => {
+                        payload.insert(partition, (offset, parse_date(timestamp)));
+                        Some(Group::GroupPayload { topic, payload })
+                    }
+                    None => {
+                        let mut map: HashMap<i32, (i64, String)> = HashMap::new();
+                        map.insert(partition, (offset, parse_date(timestamp)));
+                        Some(Group::GroupPayload {
+                            topic: topic,
+                            payload: map,
+                        })
+                    }
+                    _ => None,
                 };
-                let group_payload = Group::GroupPayload {
-                    group_offset: offset,
-                    commit_timestamp: parse_date(timestamp),
-                };
-                self.lag_db.put(
-                    bincode::serialize(&group_key).unwrap(),
-                    bincode::serialize(&group_payload).unwrap(),
-                );
+                match group_payload {
+                    Some(payload) => {
+                        self.lag_db.put(
+                            bincode::serialize(&group_key).unwrap(),
+                            bincode::serialize(&payload).unwrap(),
+                        );
+                    }
+                    _ => (),
+                }
             }
-            Err(e) => warn!(LOG, "Error to process High Topic Watermarks, {}", e),
             _ => (),
         }
     }
 
-    async fn calculate_lag(&self) {
-        info!(LOG, "CALCULATING LAG...");
-        let groups_future = self.lag_db.get_all();
-        let hwms_future = self.get_hwms();
-        let result = join!(hwms_future, groups_future);
-        let hwms = result.0;
-        let groups = result.1;
-        let mut all_lag: Vec<Group> = Vec::new();
-        for (k, v) in groups {
-            match (k, v) {
-                (
-                    Group::GroupKey {
-                        group,
-                        topic_partition,
-                    },
-                    Group::GroupPayload {
-                        group_offset,
-                        commit_timestamp,
-                    },
-                ) => {
-                    let topic_hwms = hwms.get(&topic_partition);
-                    let group_lag = Group::GroupLag {
-                        topic: topic_partition.topic,
-                        partition: topic_partition.partition,
-                        group: group,
-                        lag: topic_hwms.unwrap() - group_offset,
-                        last_commit: commit_timestamp,
+    pub fn get_lag(&self, group: &str) -> Option<Group> {
+        match self.lag_db.get(
+            bincode::serialize(&Group::GroupKey {
+                group: group.to_string(),
+            })
+            .unwrap(),
+        ) {
+            Some(Group::GroupPayload { payload, topic }) => {
+                let mut partitions_lag: Vec<Lag> = Vec::new();
+                for (partition, value) in payload {
+                    let hwms = self.get_hwms(topic.clone(), partition);
+                    let partition_lag = Lag {
+                        partition: partition,
+                        lag: hwms.1 - value.0,
+                        timestamp: value.1,
                     };
-                    all_lag.push(group_lag);
-                    self.lag_db.put(
-                        b"last_calculated_lag".to_vec(),
-                        bincode::serialize(&all_lag).unwrap(),
-                    );
+                    partitions_lag.push(partition_lag);
                 }
-                _ => {}
+                Some(Group::GroupLag {
+                    group: group.to_string(),
+                    topic: topic,
+                    lag: partitions_lag,
+                })
             }
+            _ => None,
         }
     }
 
-    async fn get_hwms(&self) -> HashMap<TopicPartition, i64> {
-        let watermark_consumer: StreamConsumer = read().create().unwrap();
-        let metadata = &watermark_consumer
-            .fetch_metadata(None, Duration::from_secs(1))
-            .expect("errou");
-        let mut topics: HashMap<TopicPartition, i64> = HashMap::new();
-        for topic in metadata.topics() {
-            let partitions_count: i32 = topic.partitions().len() as i32;
-            for p in 0..partitions_count {
-                let hwms = watermark_consumer
-                    .fetch_watermarks(&topic.name(), p, Duration::from_millis(100))
-                    .unwrap();
-                topics.insert(TopicPartition::new(topic.name().to_string(), p), hwms.1);
-            }
-        }
-        topics
-    }
-
-    pub async fn lag_calc_update(&self) {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(10));
-        loop {
-            interval.tick().await;
-            self.calculate_lag().await;
-        }
-    }
-
-    pub fn get_lag(&self) -> Option<Vec<Group>> {
-        self.lag_db.get(b"last_calculated_lag".to_vec())
+    fn get_hwms(&self, topic: String, partition: i32) -> (i64, i64) {
+        WATERMARK_CONSUMER
+            .fetch_watermarks(&topic, partition, Duration::from_millis(100))
+            .unwrap()
     }
 }
 

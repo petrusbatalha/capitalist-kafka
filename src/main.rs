@@ -24,12 +24,12 @@ fn create_log() -> slog::Logger {
 #[tokio::main]
 async fn main() {
     tokio::task::spawn(LAG_CONSUMER.consume());
-    tokio::task::spawn(LAG_CONSUMER.lag_calc_update());
 
     let cors = warp::cors().allow_any_origin();
 
     let lag = warp::path("lag")
-        .map(move || match LAG_CONSUMER.get_lag() {
+        .and(warp::path::param())
+        .map(|group: String| match LAG_CONSUMER.get_lag(&group) {
             Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
             None => {
                 warp::reply::with_status(warp::reply::json(&"Lag not found"), StatusCode::NOT_FOUND)
