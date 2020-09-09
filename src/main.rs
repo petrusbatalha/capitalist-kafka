@@ -35,6 +35,14 @@ async fn main() {
         ),
     });
 
+    let topics = warp::path("topics").map(|| match LAG_CONSUMER.fetch_topics() {
+        Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
+        None => warp::reply::with_status(
+            warp::reply::json(&"Topics not found"),
+            StatusCode::NOT_FOUND,
+        ),
+    });
+
     let lag = warp::path("lag")
         .and(warp::path::param())
         .map(|group: String| match LAG_CONSUMER.get_lag(&group) {
@@ -44,6 +52,7 @@ async fn main() {
             }
         })
         .with(cors)
-        .or(groups);
+        .or(groups)
+        .or(topics);
     warp::serve(lag).run(([127, 0, 0, 1], 32666)).await;
 }

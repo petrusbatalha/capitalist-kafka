@@ -10,6 +10,17 @@ pub struct GroupMember {
     pub assignments: Vec<MemberAssignment>,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct Topic {
+    pub name: String,
+    pub partitions: Vec<Partition>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Partition {
+    pub id: i32,
+}
+
 #[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
 pub struct Group {
     pub name: String,

@@ -4,7 +4,7 @@ extern crate slog_term;
 use crate::config_reader::read;
 use crate::db_client::{DBClient, LagDB};
 use crate::parser::{parse_date, parse_member_assignment, parse_message};
-use crate::types::{Group, GroupData, GroupMember, Lag};
+use crate::types::{Group, GroupData, GroupMember, Lag, Partition, Topic};
 use futures::TryStreamExt;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
@@ -163,6 +163,28 @@ impl LagConsumer {
                     });
                 }
                 Some(groups)
+            }
+            _ => None,
+        }
+    }
+
+    pub fn fetch_topics(&self) -> Option<Vec<Topic>> {
+        match METADATA_CONSUMER.fetch_metadata(None, Duration::from_millis(100)) {
+            Ok(metadata) => {
+                let mut topics: Vec<Topic> = Vec::new();
+                for topic in metadata.topics() {
+                    let mut partitions = Vec::with_capacity(topic.partitions().len());
+                    for partition in topic.partitions() {
+                        partitions.push(Partition {
+                            id: partition.id(),
+                        })
+                    }
+                    topics.push(Topic {
+                        name: topic.name().to_string(),
+                        partitions: partitions,
+                    });
+                }
+                Some(topics)
             }
             _ => None,
         }
