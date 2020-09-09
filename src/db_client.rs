@@ -1,5 +1,5 @@
 extern crate bincode;
-use crate::types::Group;
+use crate::types::GroupData;
 use async_trait::async_trait;
 use rocksdb::DB;
 
@@ -14,16 +14,16 @@ pub trait DBClient<T> {
 }
 
 #[async_trait]
-impl DBClient<Group> for LagDB {
+impl DBClient<GroupData> for LagDB {
     fn put(&self, k: Vec<u8>, v: Vec<u8>) -> bool {
         self.lag_db.put(k, v).is_ok()
     }
 
-    fn get(&self, k: Vec<u8>) -> Option<Group> {
+    fn get(&self, k: Vec<u8>) -> Option<GroupData> {
         let value = self.lag_db.get(k);
         match value {
             Ok(Some(v)) => {
-                let payload: Group = bincode::deserialize(&v).unwrap();
+                let payload: GroupData = bincode::deserialize(&v).unwrap();
                 Some(payload)
             }
             _ => None,
