@@ -1,6 +1,28 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
+pub struct GroupMember {
+    pub id: String,
+    pub client_id: String,
+    pub client_host: String,
+    #[serde(default)]
+    pub assignments: Vec<MemberAssignment>,
+}
+
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
+pub struct Group {
+    pub name: String,
+    pub state: String,
+    pub members: Vec<GroupMember>,
+}
+
+#[derive(PartialEq, Serialize, Deserialize, Debug, Clone)]
+pub struct MemberAssignment {
+    pub topic: String,
+    pub partitions: Vec<i32>,
+}
+
 #[derive(Eq, Serialize, Deserialize, PartialEq, Debug)]
 pub struct Lag {
     pub partition: i32,
@@ -9,7 +31,7 @@ pub struct Lag {
 }
 
 #[derive(Eq, Serialize, Deserialize, PartialEq, Debug)]
-pub enum Group {
+pub enum GroupData {
     GroupKey {
         group: String,
     },

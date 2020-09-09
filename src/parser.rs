@@ -1,4 +1,5 @@
-use crate::types::Group;
+use crate::types::GroupData;
+use crate::types::MemberAssignment;
 use byteorder::{BigEndian, ReadBytesExt};
 use chrono::prelude::*;
 use chrono::Utc;
@@ -23,25 +24,25 @@ pub fn read_string(rdr: &mut Cursor<&[u8]>) -> Result<String> {
 fn parse_group_offset(
     key_rdr: &mut Cursor<&[u8]>,
     payload_rdr: &mut Cursor<&[u8]>,
-) -> Result<Group> {
+) -> Result<GroupData> {
     let group = read_string(key_rdr)?;
     let topic = read_string(key_rdr)?;
     let partition = key_rdr.read_i32::<BigEndian>()?;
     if !payload_rdr.get_ref().is_empty() {
         let _version = payload_rdr.read_i16::<BigEndian>()?;
         let offset = payload_rdr.read_i64::<BigEndian>()?;
-        Ok(Group::OffsetCommit {
+        Ok(GroupData::OffsetCommit {
             group,
             topic,
             partition,
             offset,
         })
     } else {
-        Ok(Group::None)
+        Ok(GroupData::None)
     }
 }
 
-pub fn parse_message(key: &[u8], payload: &[u8]) -> Result<Group> {
+pub fn parse_message(key: &[u8], payload: &[u8]) -> Result<GroupData> {
     let mut key_rdr = Cursor::new(key);
     let key_version = key_rdr.read_i16::<BigEndian>()?;
     match key_version {
@@ -55,4 +56,21 @@ pub fn parse_date(timestamp: Timestamp) -> String {
     let naive = NaiveDateTime::from_timestamp(t.unwrap() / 1000, 0);
     let datetime: DateTime<Utc> = DateTime::from_utc(naive, Utc);
     datetime.format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+pub fn parse_member_assignment(payload_rdr: &mut Cursor<&[u8]>) -> Result<Vec<MemberAssignment>> {
+    let _version = payload_rdr.read_i16::<BigEndian>()?;
+    let assign_len = payload_rdr.read_i32::<BigEndian>()?;
+    let mut assigns = Vec::with_capacity(assign_len as usize);
+    for _ in 0..assign_len {
+        let topic = read_str(payload_rdr)?.to_owned();
+        let partition_len = payload_rdr.read_i32::<BigEndian>()?;
+        let mut partitions = Vec::with_capacity(partition_len as usize);
+        for _ in 0..partition_len {
+            let partition = payload_rdr.read_i32::<BigEndian>()?;
+            partitions.push(partition);
+        }
+        assigns.push(MemberAssignment { topic, partitions })
+    }
+    Ok(assigns)
 }

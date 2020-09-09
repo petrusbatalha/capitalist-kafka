@@ -3,8 +3,8 @@ extern crate slog_async;
 extern crate slog_term;
 use crate::config_reader::read;
 use crate::db_client::{DBClient, LagDB};
-use crate::parser::{parse_date, parse_message};
-use crate::types::{Group, Lag};
+use crate::parser::{parse_date, parse_member_assignment, parse_message};
+use crate::types::{Group, GroupData, GroupMember, Lag};
 use futures::TryStreamExt;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
@@ -12,12 +12,13 @@ use rdkafka::consumer::Consumer;
 use rdkafka::message::{Message, OwnedMessage};
 use slog::*;
 use std::collections::HashMap;
+use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Duration;
 
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
-    static ref WATERMARK_CONSUMER: StreamConsumer = read().create().unwrap();
+    static ref METADATA_CONSUMER: StreamConsumer = read().create().unwrap();
     pub static ref LAG_CONSUMER: LagConsumer = LagConsumer {
         lag_db: Arc::new(LagDB {
             lag_db: rocksdb::DB::open_default("/tmp/rocksdb".to_string()).unwrap()
@@ -61,23 +62,23 @@ impl LagConsumer {
         let key = owned_message.key().unwrap_or(&[]);
         let payload = owned_message.payload().unwrap_or(&[]);
         match parse_message(key, payload) {
-            Ok(Group::OffsetCommit {
+            Ok(GroupData::OffsetCommit {
                 group,
                 topic,
                 partition,
                 offset,
             }) => {
-                let group_key = Group::GroupKey { group: group };
+                let group_key = GroupData::GroupKey { group: group };
                 let serialized_group_key = bincode::serialize(&group_key).unwrap();
-                let group_payload: Option<Group> = match self.lag_db.get(serialized_group_key) {
-                    Some(Group::GroupPayload { mut payload, topic }) => {
+                let group_payload: Option<GroupData> = match self.lag_db.get(serialized_group_key) {
+                    Some(GroupData::GroupPayload { mut payload, topic }) => {
                         payload.insert(partition, (offset, parse_date(timestamp)));
-                        Some(Group::GroupPayload { topic, payload })
+                        Some(GroupData::GroupPayload { topic, payload })
                     }
                     None => {
                         let mut map: HashMap<i32, (i64, String)> = HashMap::new();
                         map.insert(partition, (offset, parse_date(timestamp)));
-                        Some(Group::GroupPayload {
+                        Some(GroupData::GroupPayload {
                             topic: topic,
                             payload: map,
                         })
@@ -98,14 +99,14 @@ impl LagConsumer {
         }
     }
 
-    pub fn get_lag(&self, group: &str) -> Option<Group> {
+    pub fn get_lag(&self, group: &str) -> Option<GroupData> {
         match self.lag_db.get(
-            bincode::serialize(&Group::GroupKey {
+            bincode::serialize(&GroupData::GroupKey {
                 group: group.to_string(),
             })
             .unwrap(),
         ) {
-            Some(Group::GroupPayload { payload, topic }) => {
+            Some(GroupData::GroupPayload { payload, topic }) => {
                 let mut partitions_lag: Vec<Lag> = Vec::new();
                 for (partition, value) in payload {
                     let hwms = self.get_hwms(topic.clone(), partition);
@@ -116,7 +117,7 @@ impl LagConsumer {
                     };
                     partitions_lag.push(partition_lag);
                 }
-                Some(Group::GroupLag {
+                Some(GroupData::GroupLag {
                     group: group.to_string(),
                     topic: topic,
                     lag: partitions_lag,
@@ -127,9 +128,44 @@ impl LagConsumer {
     }
 
     fn get_hwms(&self, topic: String, partition: i32) -> (i64, i64) {
-        WATERMARK_CONSUMER
+        METADATA_CONSUMER
             .fetch_watermarks(&topic, partition, Duration::from_millis(100))
-            .unwrap()
+            .unwrap_or((-1, -1))
+    }
+
+    pub fn fetch_groups(&self) -> Option<Vec<Group>> {
+        match METADATA_CONSUMER.fetch_group_list(None, Duration::from_millis(100)) {
+            Ok(group_list) => {
+                let mut groups: Vec<Group> = Vec::new();
+                for g in group_list.groups() {
+                    let members: Vec<GroupMember> = g
+                        .members()
+                        .iter()
+                        .map(|m| {
+                            let mut assigns = Vec::new();
+                            if let Some(assignment) = m.assignment() {
+                                let mut payload_rdr = Cursor::new(assignment);
+                                assigns = parse_member_assignment(&mut payload_rdr)
+                                    .expect("Parse member assignment failed");
+                            };
+                            GroupMember {
+                                id: m.id().to_string(),
+                                client_id: m.client_id().to_string(),
+                                client_host: m.client_host().to_string(),
+                                assignments: assigns,
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    groups.push(Group {
+                        name: g.name().to_string(),
+                        state: g.state().to_string(),
+                        members: members,
+                    });
+                }
+                Some(groups)
+            }
+            _ => None,
+        }
     }
 }
 
