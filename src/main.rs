@@ -29,9 +29,10 @@ async fn main() {
 
     let groups = warp::path("groups").map(|| match LAG_CONSUMER.fetch_groups() {
         Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
-        None => {
-            warp::reply::with_status(warp::reply::json(&"Lag not found"), StatusCode::NOT_FOUND)
-        }
+        None => warp::reply::with_status(
+            warp::reply::json(&"Groups not found"),
+            StatusCode::NOT_FOUND,
+        ),
     });
 
     let lag = warp::path("lag")
