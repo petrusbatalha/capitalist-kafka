@@ -8,6 +8,9 @@ pub fn fetch_topics() -> Option<Vec<Topic>> {
         Ok(metadata) => {
             let mut topics: Vec<Topic> = Vec::new();
             for topic in metadata.topics() {
+                if topic.name().to_string().eq("__consumer_offsets") {
+                    continue;
+                }
                 let mut partitions = Vec::with_capacity(topic.partitions().len());
                 for partition in topic.partitions() {
                     partitions.push(Partition {
