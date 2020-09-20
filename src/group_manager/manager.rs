@@ -75,6 +75,9 @@ pub fn fetch_groups() -> Option<Vec<Group>> {
         Ok(group_list) => {
             let mut groups: Vec<Group> = Vec::new();
             for g in group_list.groups() {
+                if g.name().to_string().eq("manager_local") {
+                    continue;
+                }
                 let members: Vec<GroupMember> = g
                     .members()
                     .iter()

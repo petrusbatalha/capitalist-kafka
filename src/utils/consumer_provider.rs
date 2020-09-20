@@ -16,6 +16,7 @@ pub fn create_consumer() -> StreamConsumer {
 }
 
 fn read() -> ClientConfig {
+    const GROUP_ID: &str = "manager_local";
     let mut kafka_config = ClientConfig::new();
     let mut settings = config::Config::new();
     settings
@@ -30,6 +31,7 @@ fn read() -> ClientConfig {
             Err(_) => continue,
         };
     }
+    kafka_config.set("group.id", GROUP_ID);
     kafka_config.set("enable.auto.commit", "false");
     kafka_config
 }
