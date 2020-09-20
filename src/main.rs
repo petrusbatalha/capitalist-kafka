@@ -1,58 +1,30 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate bincode;
-mod config_reader;
+mod consumer_provider;
 mod db_client;
-mod lag_consumer;
+mod group_manager;
+mod metadata_manager;
 mod parser;
 mod types;
-use lag_consumer::LAG_CONSUMER;
-use slog::*;
-use warp::{http::StatusCode, Filter};
+mod logger;
+use logger::create_log;
+use group_manager::api::{group_list, groups_lag};
+use metadata_manager::api::{topics};
+use warp::{Filter};
 
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
 }
 
-fn create_log() -> slog::Logger {
-    let decorator = slog_term::TermDecorator::new().force_plain().build();
-    let drain = slog_term::CompactFormat::new(decorator).build().fuse();
-    let drain = slog_async::Async::new(drain).build().fuse();
-    slog::Logger::root(drain, o!())
-}
-
 #[tokio::main]
 async fn main() {
-    tokio::task::spawn(LAG_CONSUMER.consume());
-
+    tokio::task::spawn(group_manager::manager::start());
     let cors = warp::cors().allow_any_origin();
-
-    let groups = warp::path("groups").map(|| match LAG_CONSUMER.fetch_groups() {
-        Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
-        None => warp::reply::with_status(
-            warp::reply::json(&"Groups not found"),
-            StatusCode::NOT_FOUND,
-        ),
-    });
-
-    let topics = warp::path("topics").map(|| match LAG_CONSUMER.fetch_topics() {
-        Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
-        None => warp::reply::with_status(
-            warp::reply::json(&"Topics not found"),
-            StatusCode::NOT_FOUND,
-        ),
-    });
-
-    let lag = warp::path("lag")
-        .and(warp::path::param())
-        .map(|group: String| match LAG_CONSUMER.get_lag(&group) {
-            Some(v) => warp::reply::with_status(warp::reply::json(&v), StatusCode::OK),
-            None => {
-                warp::reply::with_status(warp::reply::json(&"Lag not found"), StatusCode::NOT_FOUND)
-            }
-        })
-        .with(cors)
-        .or(groups)
-        .or(topics);
-    warp::serve(lag).run(([127, 0, 0, 1], 32666)).await;
+    let routes =
+                group_list()
+                .or(groups_lag())
+                .or(topics())
+                .with(cors);
+    warp::serve(routes).run(([127, 0, 0, 1], 32666)).await;
 }

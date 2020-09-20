@@ -1,9 +1,21 @@
+extern crate config;
+use crate::logger::create_log;
 use config::Value;
 use rdkafka::config::ClientConfig;
+use rdkafka::consumer::stream_consumer::StreamConsumer;
 use std::collections::HashMap;
-extern crate config;
+use std::sync::Arc;
 
-pub fn read() -> ClientConfig {
+lazy_static! {
+    static ref CURRENT_CONFIG: Arc<ClientConfig> = Arc::new(read());
+    static ref LOG: slog::Logger = create_log();
+}
+  
+pub fn create_consumer() -> StreamConsumer {
+    CURRENT_CONFIG.clone().create().unwrap()
+}
+
+fn read() -> ClientConfig {
     let mut kafka_config = ClientConfig::new();
     let mut settings = config::Config::new();
     settings
