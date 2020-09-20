@@ -4,18 +4,16 @@ use crate::db_client::DBClient;
 use crate::parser::{parse_date, parse_member_assignment, parse_message};
 use crate::types::{Group, GroupData, GroupMember, Lag};
 use crate::utils::logger::create_log;
-use crate::consumer_provider::{create_consumer, get_timeout};
+use crate::consumer_provider::{create_consumer, get_timeout, CONSUMER};
 use slog::{info};
 use futures::TryStreamExt;
 use rdkafka::consumer::Consumer;
-use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::message::{Message, OwnedMessage};
 use std::collections::HashMap;
 use std::io::Cursor;
 
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
-    static ref CONSUMER: StreamConsumer = create_consumer();
 }
 
 pub async fn start() {

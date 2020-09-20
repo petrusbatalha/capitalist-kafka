@@ -10,10 +10,11 @@ use std::sync::Arc;
 lazy_static! {
     static ref CURRENT_CONFIG: Arc<ClientConfig> = Arc::new(read());
     static ref LOG: slog::Logger = create_log();
+    pub static ref CONSUMER: Arc<StreamConsumer> = Arc::new(create_consumer());
 }
 
 pub fn get_timeout() -> Duration {
-    Duration::from_millis(100)
+    Duration::from_millis(20)
 }
   
 pub fn create_consumer() -> StreamConsumer {

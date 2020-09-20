@@ -1,9 +1,9 @@
-use crate::consumer_provider::{create_consumer, get_timeout};
+use crate::consumer_provider::{CONSUMER, get_timeout};
 use crate::types::{Topic, Partition};
 use rdkafka::consumer::Consumer;
 
 pub fn fetch_topics() -> Option<Vec<Topic>> {
-    match create_consumer().fetch_metadata(None, get_timeout()) {
+    match CONSUMER.fetch_metadata(None, get_timeout()) {
         Ok(metadata) => {
             let mut topics: Vec<Topic> = Vec::new();
             for topic in metadata.topics() {
