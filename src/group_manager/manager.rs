@@ -4,7 +4,7 @@ use crate::db_client::DBClient;
 use crate::parser::{parse_date, parse_member_assignment, parse_message};
 use crate::types::{Group, GroupData, GroupMember, Lag};
 use crate::utils::logger::create_log;
-use crate::consumer_provider::create_consumer;
+use crate::consumer_provider::{create_consumer, get_timeout};
 use slog::{info};
 use futures::TryStreamExt;
 use rdkafka::consumer::Consumer;
@@ -12,7 +12,6 @@ use rdkafka::consumer::stream_consumer::StreamConsumer;
 use rdkafka::message::{Message, OwnedMessage};
 use std::collections::HashMap;
 use std::io::Cursor;
-use std::time::Duration;
 
 lazy_static! {
     static ref LOG: slog::Logger = create_log();
@@ -71,7 +70,7 @@ pub fn get_lag(group: &str) -> Option<GroupData> {
 }
 
 pub fn fetch_groups() -> Option<Vec<Group>> {
-    match CONSUMER.fetch_group_list(None, Duration::from_millis(100)) {
+    match CONSUMER.fetch_group_list(None, get_timeout()) {
         Ok(group_list) => {
             let mut groups: Vec<Group> = Vec::new();
             for g in group_list.groups() {
@@ -152,6 +151,6 @@ fn push_group_data(owned_message: OwnedMessage) {
 
 fn get_hwms(topic: String, partition: i32) -> (i64, i64) {
     CONSUMER
-        .fetch_watermarks(&topic, partition, Duration::from_millis(100))
+        .fetch_watermarks(&topic, partition, get_timeout())
         .unwrap_or((-1, -1))
 }

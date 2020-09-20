@@ -4,11 +4,16 @@ use config::Value;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;
 use std::collections::HashMap;
+use std::time::Duration; 
 use std::sync::Arc;
 
 lazy_static! {
     static ref CURRENT_CONFIG: Arc<ClientConfig> = Arc::new(read());
     static ref LOG: slog::Logger = create_log();
+}
+
+pub fn get_timeout() -> Duration {
+    Duration::from_millis(100)
 }
   
 pub fn create_consumer() -> StreamConsumer {
