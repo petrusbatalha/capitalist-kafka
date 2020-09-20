@@ -1,14 +1,10 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate bincode;
-mod consumer_provider;
-mod db_client;
+mod utils;
 mod group_manager;
 mod metadata_manager;
-mod parser;
-mod types;
-mod logger;
-use logger::create_log;
+use utils::{consumer_provider, db_client, logger::create_log, parser, types};
 use group_manager::api::{group_list, groups_lag};
 use metadata_manager::api::{topics};
 use warp::{Filter};

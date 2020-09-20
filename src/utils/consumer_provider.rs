@@ -1,5 +1,5 @@
 extern crate config;
-use crate::logger::create_log;
+use crate::utils::logger::create_log;
 use config::Value;
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::stream_consumer::StreamConsumer;

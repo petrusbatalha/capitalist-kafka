@@ -3,7 +3,7 @@ use super::repository::GroupDB;
 use crate::db_client::DBClient;
 use crate::parser::{parse_date, parse_member_assignment, parse_message};
 use crate::types::{Group, GroupData, GroupMember, Lag};
-use crate::logger::create_log;
+use crate::utils::logger::create_log;
 use crate::consumer_provider::create_consumer;
 use slog::{info};
 use futures::TryStreamExt;
