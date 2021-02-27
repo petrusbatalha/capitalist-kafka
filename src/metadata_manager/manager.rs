@@ -18,7 +18,7 @@ pub fn fetch_topics() -> Option<Vec<Topic>> {
                 }
                 topics.push(Topic {
                     name: topic.name().to_string(),
-                    partitions: partitions,
+                    partitions,
                 });
             }
             Some(topics)

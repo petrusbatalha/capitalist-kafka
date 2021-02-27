@@ -23,7 +23,7 @@ pub async fn start() {
         .expect("Can't subscribe to __consumer_offset topic. ERR");
 
     let stream_processor = consumer
-        .start()
+        .stream()
         .try_for_each(|borrowed_message| async move {
             info!(LOG, "Consuming messages...");
             let owned_message = borrowed_message.detach();
@@ -51,7 +51,7 @@ pub fn get_lag(group: &str) -> Option<GroupData> {
             for (partition, value) in payload {
                 let hwms = get_hwms(topic.clone(), partition);
                 let partition_lag = Lag {
-                    partition: partition,
+                    partition,
                     lag: hwms.1 - value.0,
                     timestamp: value.1,
                 };
@@ -59,7 +59,7 @@ pub fn get_lag(group: &str) -> Option<GroupData> {
             }
             Some(GroupData::GroupLag {
                 group: group.to_string(),
-                topic: topic,
+                topic,
                 lag: partitions_lag,
             })
         }
@@ -96,7 +96,7 @@ pub fn fetch_groups() -> Option<Vec<Group>> {
                 groups.push(Group {
                     name: g.name().to_string(),
                     state: g.state().to_string(),
-                    members: members,
+                    members,
                 });
             }
             Some(groups)
@@ -116,7 +116,7 @@ fn push_group_data(owned_message: OwnedMessage) {
             partition,
             offset,
         }) => {
-            let group_key = GroupData::GroupKey { group: group };
+            let group_key = GroupData::GroupKey { group };
             let serialized_group_key = bincode::serialize(&group_key).unwrap();
             let group_payload: Option<GroupData> = match GroupDB::get(serialized_group_key) {
                 Some(GroupData::GroupPayload { mut payload, topic }) => {
@@ -127,7 +127,7 @@ fn push_group_data(owned_message: OwnedMessage) {
                     let mut map: HashMap<i32, (i64, String)> = HashMap::new();
                     map.insert(partition, (offset, parse_date(timestamp)));
                     Some(GroupData::GroupPayload {
-                        topic: topic,
+                        topic,
                         payload: map,
                     })
                 }
