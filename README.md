@@ -9,9 +9,11 @@ The Capitalist, a cloud-enabled kafka lag exporter. Written in Rust to be blazin
 
 ## How it works?
 - Consume the __consumer_offsets topic.
-- For each consumed event it will fetch the topic highwatermark.
-- Calculate the lag for the consumer group, topic and partitions !
-- Expose metrics on the /metrics endopoint, using Prometheus format.
+- Parse de kafka message to readable text and store in RocksDB.
+- Expose 3 routes. 
+- /groups - shows all the kafka groups and its states.
+- /topics - shows all kafka topics.
+- /lag/{group} - shows lag for the specified group.
 
 # License
 This project is licensed under the MIT License - see the LICENSE.md file for details
